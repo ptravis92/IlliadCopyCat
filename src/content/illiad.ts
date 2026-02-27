@@ -1,28 +1,91 @@
 import type { WorldCatMetadata } from './types';
 
 // ---------------------------------------------------------------------------
+// Form type mapping
+//
+// Derived from the institution's ILLiad request menu:
+//
+//   Form=21                              → Book loan
+//   Form=20, Value=GenericRequestVideo   → Video recording
+//   Form=20, Value=GenericRequestSpoken  → Spoken / audiobook recording
+//   Form=20, Value=GenericRequestMusic   → Music recording
+//   Form=22                              → Copies (article, photocopy)
+//   Form=29                              → Other (map, manuscript, kit, etc.)
+// ---------------------------------------------------------------------------
+
+type ILLiadForm =
+  | 'book'     // Form=21
+  | 'video'    // Form=20 + Value=GenericRequestVideo
+  | 'spoken'   // Form=20 + Value=GenericRequestSpoken
+  | 'music'    // Form=20 + Value=GenericRequestMusic
+  | 'article'  // Form=22
+  | 'other';   // Form=29
+
+// ---------------------------------------------------------------------------
 // Format detection
 // ---------------------------------------------------------------------------
 
-type ILLiadForm = 'loan' | 'article';
-
 /**
- * Guesses whether the item is a book loan or an article/photocopy request.
+ * Maps WorldCat format strings (as returned by scrapeFormat) to ILLiad form types.
  *
- * Heuristic priority:
- *  1. WorldCat format field (most explicit)
- *  2. Presence of ISSN-only vs ISBN — journals have ISSNs, books have ISBNs
- *  3. Default to loan (most common WorldCat use-case)
+ * FirstSearch material-type labels come from the <span title="..."> icon in
+ * the record summary, e.g. "Visual Material", "Sound Recording", "Book".
  */
 function detectForm(metadata: WorldCatMetadata): ILLiadForm {
   const fmt = metadata.format.toLowerCase();
+
+  // Articles and serials → copies request
   if (fmt.includes('article') || fmt.includes('journal') || fmt.includes('periodical')) {
     return 'article';
   }
+  // ISSN present with no ISBN is a strong journal/serial signal
   if (metadata.issns.length > 0 && metadata.isbns.length === 0) {
     return 'article';
   }
-  return 'loan';
+
+  // Video recordings (DVD, VHS, Blu-ray, streaming video, etc.)
+  if (
+    fmt.includes('visual material') ||
+    fmt.includes('videorecording') ||
+    fmt.includes('video recording') ||
+    fmt.includes('dvd') ||
+    fmt.includes('blu-ray')
+  ) {
+    return 'video';
+  }
+
+  // Spoken word / audiobooks (check before generic "sound recording"
+  // because spoken recordings are a subset of sound recordings)
+  if (
+    fmt.includes('spoken word') ||
+    fmt.includes('nonmusical sound') ||
+    fmt.includes('audiobook') ||
+    fmt.includes('talking book')
+  ) {
+    return 'spoken';
+  }
+
+  // Music recordings
+  if (fmt.includes('sound recording') || fmt.includes('music')) {
+    return 'music';
+  }
+
+  // Other non-book physical items
+  if (
+    fmt.includes('map') ||
+    fmt.includes('manuscript') ||
+    fmt.includes('archival') ||
+    fmt.includes('kit') ||
+    fmt.includes('object') ||
+    fmt.includes('computer file') ||
+    fmt.includes('software')
+  ) {
+    return 'other';
+  }
+
+  // Explicit book formats (or unknown / empty — books are by far the most
+  // common WorldCat item type so this is a safe default)
+  return 'book';
 }
 
 // ---------------------------------------------------------------------------
@@ -32,33 +95,53 @@ function detectForm(metadata: WorldCatMetadata): ILLiadForm {
 /**
  * Builds an ILLiad OpenURL (Z39.88 KEV format) request URL from WorldCat metadata.
  *
- * ILLiad interprets these standard parameters:
- *   Action=10  → submit a new ILL request
- *   Form=30    → book loan
- *   Form=20    → article / photocopy
- *
  * @param baseUrl  The institution's ILLiad dll URL, e.g.
  *                 https://yourlib.illiad.oclc.org/illiad/illiad.dll
  * @param metadata Scraped WorldCat metadata
  */
 export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): string {
   const form = detectForm(metadata);
+
+  console.log(`[IlliadCopyCat] Detected form type: ${form} (format: "${metadata.format}")`);
+
   const params = new URLSearchParams();
-
-  // ILLiad action and form codes
   params.set('Action', '10');
-  params.set('Form', form === 'loan' ? '30' : '20');
 
-  // OpenURL genre
-  params.set('rft.genre', form === 'loan' ? 'book' : 'article');
-
-  // Title — rft.btitle is the preferred key for monographs; rft.title as fallback
-  if (metadata.title) {
-    params.set('rft.title', metadata.title);
-    if (form === 'loan') params.set('rft.btitle', metadata.title);
+  // Form code and optional Value parameter
+  switch (form) {
+    case 'book':
+      params.set('Form', '21');
+      params.set('rft.genre', 'book');
+      break;
+    case 'video':
+      params.set('Form', '20');
+      params.set('Value', 'GenericRequestVideo');
+      break;
+    case 'spoken':
+      params.set('Form', '20');
+      params.set('Value', 'GenericRequestSpoken');
+      break;
+    case 'music':
+      params.set('Form', '20');
+      params.set('Value', 'GenericRequestMusic');
+      break;
+    case 'article':
+      params.set('Form', '22');
+      params.set('rft.genre', 'article');
+      break;
+    case 'other':
+      params.set('Form', '29');
+      break;
   }
 
-  // First author only — ILLiad's rft.au field
+  // Title fields
+  if (metadata.title) {
+    params.set('rft.title', metadata.title);
+    // rft.btitle is the monograph-specific title field — books only
+    if (form === 'book') params.set('rft.btitle', metadata.title);
+  }
+
+  // First author
   if (metadata.authors.length > 0) {
     params.set('rft.au', metadata.authors[0]);
   }
@@ -67,16 +150,16 @@ export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): str
   if (metadata.year)      params.set('rft.date', metadata.year);
   if (metadata.edition)   params.set('rft.edition', metadata.edition);
 
-  // Identifiers
-  if (form === 'loan') {
-    // Prefer ISBN-13 over ISBN-10 when both are present
+  // Identifiers — only pass rft.isbn for books to avoid ILLiad
+  // mis-classifying a DVD or CD as a book request
+  if (form === 'article') {
+    if (metadata.issns[0]) params.set('rft.issn', metadata.issns[0]);
+  } else if (form === 'book') {
     const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
     if (isbn) params.set('rft.isbn', isbn);
-  } else {
-    if (metadata.issns[0]) params.set('rft.issn', metadata.issns[0]);
   }
 
-  // OCLC number — ILLiad-specific ESPNumber field + standard OpenURL rft_id
+  // OCLC number — ILLiad-specific ESPNumber + standard OpenURL rft_id
   if (metadata.oclcNumber) {
     params.set('ESPNumber', metadata.oclcNumber);
     params.set('rft_id', `info:oclcnum/${metadata.oclcNumber}`);
