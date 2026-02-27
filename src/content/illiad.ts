@@ -134,32 +134,35 @@ export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): str
       break;
   }
 
-  // Title fields
-  if (metadata.title) {
-    params.set('rft.title', metadata.title);
-    // rft.btitle is the monograph-specific title field — books only
-    if (form === 'book') params.set('rft.btitle', metadata.title);
-  }
-
-  // First author
-  if (metadata.authors.length > 0) {
-    params.set('rft.au', metadata.authors[0]);
-  }
-
-  if (metadata.publisher) params.set('rft.pub', metadata.publisher);
-  if (metadata.year)      params.set('rft.date', metadata.year);
-  if (metadata.edition)   params.set('rft.edition', metadata.edition);
-
-  // Identifiers — only pass rft.isbn for books to avoid ILLiad
-  // mis-classifying a DVD or CD as a book request
-  if (form === 'article') {
-    if (metadata.issns[0]) params.set('rft.issn', metadata.issns[0]);
-  } else if (form === 'book') {
+  if (form === 'video' || form === 'spoken' || form === 'music') {
+    // GenericRequest* forms (Form=20) do not map OpenURL rft.* parameters to
+    // their fields — ILLiad only does that mapping for the standard book/article
+    // forms. Pass the native ILLiad field names that match the HTML form inputs.
+    if (metadata.title)       params.set('LoanTitle', metadata.title);
+    if (metadata.authors[0])  params.set('LoanAuthor', metadata.authors[0]);
+    if (metadata.year)        params.set('LoanDate', metadata.year);
+    // The field is named "ISSN" in the ILLiad schema but labelled "ISBN" on the form
     const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
-    if (isbn) params.set('rft.isbn', isbn);
+    if (isbn)                 params.set('ISSN', isbn);
+  } else {
+    // Book (Form=21) and article (Form=22) support OpenURL Z39.88 rft.* parameters.
+    if (metadata.title) {
+      params.set('rft.title', metadata.title);
+      if (form === 'book') params.set('rft.btitle', metadata.title);
+    }
+    if (metadata.authors[0])  params.set('rft.au', metadata.authors[0]);
+    if (metadata.publisher)   params.set('rft.pub', metadata.publisher);
+    if (metadata.year)        params.set('rft.date', metadata.year);
+    if (form === 'book' && metadata.edition) params.set('rft.edition', metadata.edition);
+    if (form === 'article') {
+      if (metadata.issns[0]) params.set('rft.issn', metadata.issns[0]);
+    } else if (form === 'book') {
+      const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
+      if (isbn) params.set('rft.isbn', isbn);
+    }
   }
 
-  // OCLC number — ILLiad-specific ESPNumber + standard OpenURL rft_id
+  // OCLC number — native ILLiad field (works for all form types)
   if (metadata.oclcNumber) {
     params.set('ESPNumber', metadata.oclcNumber);
     params.set('rft_id', `info:oclcnum/${metadata.oclcNumber}`);
