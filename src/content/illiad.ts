@@ -138,8 +138,8 @@ export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): str
     // GenericRequest* forms (Form=20) do not map OpenURL rft.* parameters to
     // their fields — ILLiad only does that mapping for the standard book/article
     // forms. Pass the native ILLiad field names that match the HTML form inputs.
-    if (metadata.title)       params.set('LoanTitle', metadata.title);
-    if (metadata.authors[0])  params.set('LoanAuthor', metadata.authors[0]);
+    if (metadata.title)            params.set('LoanTitle', metadata.title);
+    if (metadata.authors.length)   params.set('LoanAuthor', metadata.authors.join('; '));
     if (metadata.year)        params.set('LoanDate', metadata.year);
     // The field is named "ISSN" in the ILLiad schema but labelled "ISBN" on the form
     const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
