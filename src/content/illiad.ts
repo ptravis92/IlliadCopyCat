@@ -135,32 +135,25 @@ export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): str
       break;
   }
 
-  if (form === 'video' || form === 'spoken' || form === 'music') {
-    // GenericRequest* forms (Form=20) do not map OpenURL rft.* parameters to
-    // their fields — ILLiad only does that mapping for the standard book/article
-    // forms. Pass the native ILLiad field names that match the HTML form inputs.
-    if (metadata.title)            params.set('LoanTitle', metadata.title);
-    if (metadata.authors.length)   params.set('LoanAuthor', metadata.authors.join('; '));
-    if (metadata.year)        params.set('LoanDate', metadata.year);
-    // The field is named "ISSN" in the ILLiad schema but labelled "ISBN" on the form
+  // All loan forms (book, video, spoken, music) share the same native ILLiad
+  // field names: LoanTitle, LoanAuthor, LoanDate, ISSN (holds ISBN), ESPNumber.
+  // rft.* OpenURL parameters are NOT reliably mapped by this ILLiad installation.
+  if (form === 'book' || form === 'video' || form === 'spoken' || form === 'music') {
+    if (metadata.title)          params.set('LoanTitle', metadata.title);
+    if (metadata.authors.length) params.set('LoanAuthor', metadata.authors.join('; '));
+    if (metadata.year)           params.set('LoanDate', metadata.year);
+    // ISSN is the ILLiad schema field name; the form labels it "ISBN (if known)"
     const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
-    if (isbn)                 params.set('ISSN', isbn);
-  } else {
-    // Book (Form=21) and article (Form=22) support OpenURL Z39.88 rft.* parameters.
-    if (metadata.title) {
-      params.set('rft.title', metadata.title);
-      if (form === 'book') params.set('rft.btitle', metadata.title);
-    }
-    if (metadata.authors[0])  params.set('rft.au', metadata.authors[0]);
-    if (metadata.publisher)   params.set('rft.pub', metadata.publisher);
-    if (metadata.year)        params.set('rft.date', metadata.year);
-    if (form === 'book' && metadata.edition) params.set('rft.edition', metadata.edition);
-    if (form === 'article') {
-      if (metadata.issns[0]) params.set('rft.issn', metadata.issns[0]);
-    } else if (form === 'book') {
-      const isbn = metadata.isbns.find((i) => i.length === 13) ?? metadata.isbns[0];
-      if (isbn) params.set('rft.isbn', isbn);
-    }
+    if (isbn)                    params.set('ISSN', isbn);
+    // LoanEdition is a free-text input on the book form (unlike the video form
+    // where it is a <select> that can't be pre-filled with arbitrary text)
+    if (form === 'book' && metadata.edition) params.set('LoanEdition', metadata.edition);
+  } else if (form === 'article') {
+    // Article / copies form — use rft.* until a native-field example is available
+    if (metadata.title)          params.set('rft.title', metadata.title);
+    if (metadata.authors[0])     params.set('rft.au', metadata.authors[0]);
+    if (metadata.year)           params.set('rft.date', metadata.year);
+    if (metadata.issns[0])       params.set('rft.issn', metadata.issns[0]);
   }
 
   // OCLC number — native ILLiad field (works for all form types)
