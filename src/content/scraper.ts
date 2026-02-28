@@ -267,9 +267,15 @@ function scrapeEdition(): string {
 
 function scrapeFormat(): string {
   if (isFirstSearch()) {
-    // FirstSearch shows the material type as the title attribute on the format icon span:
-    //   <span title="Visual Material"><img ...> Visual Material</span>
-    return document.querySelector<HTMLElement>('span[title]')?.getAttribute('title') ?? '';
+    // FirstSearch shows the broad document type as the title attribute on the
+    // format icon span: <span title="Sound Recording"><img ...></span>
+    // "Sound Recording" is too broad — it covers both music AND non-musical
+    // (spoken) recordings. The "Material Type:" labeled row contains the
+    // specific MARC type, e.g. "Non-musical recording (nsr)", which we append
+    // so that detectForm() can distinguish spoken from music recordings.
+    const iconType = document.querySelector<HTMLElement>('span[title]')?.getAttribute('title') ?? '';
+    const materialType = getFieldByLabel('Material Type:');
+    return [iconType, materialType].filter(Boolean).join('; ');
   }
   return (
     getText('[data-testid="format"]') ||

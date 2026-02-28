@@ -58,6 +58,7 @@ function detectForm(metadata: WorldCatMetadata): ILLiadForm {
   // because spoken recordings are a subset of sound recordings)
   if (
     fmt.includes('spoken word') ||
+    fmt.includes('non-musical recording') || // FirstSearch: "Non-musical recording (nsr)"
     fmt.includes('nonmusical sound') ||
     fmt.includes('audiobook') ||
     fmt.includes('talking book')
