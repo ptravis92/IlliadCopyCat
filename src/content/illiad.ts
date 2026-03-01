@@ -149,11 +149,20 @@ export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): str
     // where it is a <select> that can't be pre-filled with arbitrary text)
     if (form === 'book' && metadata.edition) params.set('LoanEdition', metadata.edition);
   } else if (form === 'article') {
-    // Article / copies form — use rft.* until a native-field example is available
-    if (metadata.title)          params.set('rft.title', metadata.title);
-    if (metadata.authors[0])     params.set('rft.au', metadata.authors[0]);
-    if (metadata.year)           params.set('rft.date', metadata.year);
-    if (metadata.issns[0])       params.set('rft.issn', metadata.issns[0]);
+    // Copies form (Form=22) native ILLiad field names.
+    // Two cases depending on record type:
+    //   Article record: "In:" row present → source = journal title, title = article title.
+    //   Serial record:  no "In:" row → title = journal title, article title unknown.
+    if (metadata.source) {
+      params.set('PhotoJournalTitle', metadata.source);
+      if (metadata.title) params.set('PhotoArticleTitle', metadata.title);
+    } else {
+      if (metadata.title) params.set('PhotoJournalTitle', metadata.title);
+    }
+    if (metadata.authors[0])     params.set('PhotoArticleAuthor', metadata.authors[0]);
+    if (metadata.year)           params.set('PhotoJournalYear', metadata.year);
+    if (metadata.pages)          params.set('PhotoJournalInclusivePages', metadata.pages);
+    if (metadata.issns[0])       params.set('ISSN', metadata.issns[0]);
   }
 
   // OCLC number — native ILLiad field (works for all form types)

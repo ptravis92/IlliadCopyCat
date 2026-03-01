@@ -9,4 +9,6 @@ export interface WorldCatMetadata {
   edition: string;
   format: string;
   language: string;
+  source: string;   // FirstSearch "In:" row — journal/periodical title for article records
+  pages: string;    // FirstSearch "Description:" row — page range for article records
 }

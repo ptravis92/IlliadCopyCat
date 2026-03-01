@@ -294,6 +294,25 @@ function scrapeLanguage(): string {
   return getText('[data-testid="language"]') || getFieldByLabel('Language');
 }
 
+function scrapeSource(): string {
+  if (isFirstSearch()) {
+    // Article records have an "In:" row containing the journal/periodical title.
+    // Strip trailing MARC period, e.g. "Extrapolation." → "Extrapolation".
+    return getFieldByLabel('In:').replace(/\.$/, '').trim();
+  }
+  return '';
+}
+
+function scrapePages(): string {
+  if (isFirstSearch()) {
+    // "Description:" row contains the page range, e.g. "pages 53-64".
+    // Strip leading "pages " / "p. " prefix to leave just the numbers.
+    const raw = getFieldByLabel('Description:');
+    return raw.replace(/^p(?:ages?)?\.\s*/i, '').trim();
+  }
+  return '';
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -330,17 +349,25 @@ export async function scrapeWorldCatItem(): Promise<WorldCatMetadata | null> {
 }
 
 function buildMetadata(oclcNumber: string): WorldCatMetadata {
-  const pageText = document.body.innerText;
+  // For FirstSearch, restrict ISBN/ISSN extraction to the "Standard No:" labeled
+  // row only. Searching all page text causes false matches: e.g. author date
+  // ranges like "1892-1973" satisfy the ISSN regex pattern.
+  const identifierText = isFirstSearch()
+    ? (getFieldByLabel('Standard No:') ?? '')
+    : document.body.innerText;
+
   return {
     oclcNumber,
     title: scrapeTitle(),
     authors: scrapeAuthors(),
-    isbns: extractIsbns(pageText),
-    issns: extractIssns(pageText),
+    isbns: extractIsbns(identifierText),
+    issns: extractIssns(identifierText),
     publisher: scrapePublisher(),
     year: scrapeYear(),
     edition: scrapeEdition(),
     format: scrapeFormat(),
     language: scrapeLanguage(),
+    source: scrapeSource(),
+    pages: scrapePages(),
   };
 }
