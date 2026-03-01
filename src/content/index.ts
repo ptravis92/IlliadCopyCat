@@ -1,19 +1,22 @@
-import { isItemPage, scrapeWorldCatItem } from './scraper';
+import { createScraper } from './scrapers';
 import { injectButton, removeButton } from './button';
 import { getSettings } from '../shared/storage';
+
+// Decided once at module load — FirstSearch vs. WorldCat SPA.
+const scraper = createScraper();
 
 // ---------------------------------------------------------------------------
 // Core logic
 // ---------------------------------------------------------------------------
 
 async function run(): Promise<void> {
-  if (!isItemPage()) {
+  if (!scraper.isItemPage()) {
     removeButton();
     return;
   }
 
   const [metadata, settings] = await Promise.all([
-    scrapeWorldCatItem(),
+    scraper.scrape(),
     getSettings(),
   ]);
 
