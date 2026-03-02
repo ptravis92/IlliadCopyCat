@@ -30,7 +30,10 @@ module.exports = {
   },
   plugins: [
     new CopyPlugin({
-      patterns: [{ from: 'src/manifest.json', to: 'manifest.json' }],
+      patterns: [
+        { from: 'src/manifest.json', to: 'manifest.json' },
+        { from: 'src/icons', to: 'icons' },
+      ],
     }),
     new HtmlWebpackPlugin({
       template: './src/options/index.html',
