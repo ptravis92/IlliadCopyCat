@@ -3,8 +3,6 @@ import type { IScraper } from './IScraper';
 import {
   getText,
   getAllText,
-  getFieldByLabel,
-  getAllFieldsByLabel,
   extractIsbns,
   waitForElement,
 } from './utils';
@@ -38,8 +36,11 @@ export class WorldCatSpaScraper implements IScraper {
   // ---------------------------------------------------------------------------
   // Field scrapers
   //
-  // NOTE: selector strings should be verified against the live DOM. WorldCat
-  // may restructure the page; update selectors here if so.
+  // NOTE: data-testid and aria-labelledby values are dynamic — they include
+  // the OCLC number (e.g. "publisher-930058725"). Use attribute prefix
+  // matching ([attr^="prefix"]) rather than exact values.
+  //
+  // Update selectors here if WorldCat restructures the page.
   // ---------------------------------------------------------------------------
 
   scrapeTitle(): string {
@@ -47,51 +48,42 @@ export class WorldCatSpaScraper implements IScraper {
   }
 
   scrapeAuthors(): string[] {
-    for (const sel of [
-      '[data-testid="author-link"]',
-      'a[href*="creator="]',
-      'a[href*="au="]',
-    ]) {
-      const found = getAllText(sel);
-      if (found.length > 0) return found;
-    }
-    // XPath fallback
-    const byLabel = getAllFieldsByLabel('Author').concat(getAllFieldsByLabel('Authors'));
-    return byLabel.length > 0 ? byLabel : [];
+    // Author links carry au= in the search href, e.g. /search?q=au=%22...%22
+    return getAllText('a[href*="au="]');
   }
 
   scrapePublisher(): string {
-    return (
-      getText('[data-testid="publisher"]') ||
-      getFieldByLabel('Publisher') ||
-      getFieldByLabel('Published')
-    );
+    // data-testid="publisher-{oclcNumber}" — prefix match to avoid hardcoding
+    return getText('[data-testid^="publisher-"]');
   }
 
   scrapeYear(): string {
-    const raw =
-      getText('[data-testid="publication-date"]') ||
-      getFieldByLabel('Date') ||
-      getFieldByLabel('Year') ||
-      getFieldByLabel('Publication date');
+    // Year is embedded in the publisher text: "Scout Press, New York, 2016"
+    const raw = getText('[data-testid^="publisher-"]');
     const match = raw.match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
-    return match ? match[1] : raw;
+    return match ? match[1] : '';
   }
 
   scrapeEdition(): string {
-    return getText('[data-testid="edition"]') || getFieldByLabel('Edition');
+    // span[aria-labelledby^="edition-"] contains the edition text followed by
+    // a "View all formats and editions" link — strip the link text.
+    const full = getText('[aria-labelledby^="edition-"]');
+    return full.replace(/\s*View all formats and editions\s*$/, '').trim();
   }
 
   scrapeFormat(): string {
-    return (
-      getText('[data-testid="format"]') ||
-      getText('[aria-label*="Format"]') ||
-      getFieldByLabel('Format')
-    );
+    // data-testid="format-{oclcNumber}" — the span contains an aria-hidden SVG
+    // followed by plain text (e.g. "Print Book"). textContent omits SVG path
+    // data (no text nodes), leaving just the human-readable format label.
+    return getText('[data-testid^="format-"]');
   }
 
   scrapeLanguage(): string {
-    return getText('[data-testid="language"]') || getFieldByLabel('Language');
+    // The format/language/year line:
+    //   <span data-testid="format-...">Print Book</span>, <span>English</span>, 2016
+    // Language is the plain <span> immediately after the format span.
+    const formatEl = document.querySelector('[data-testid^="format-"]');
+    return formatEl?.nextElementSibling?.textContent?.trim() ?? '';
   }
 
   scrapeSource(): string {
@@ -105,6 +97,10 @@ export class WorldCatSpaScraper implements IScraper {
   }
 
   scrapeIsbns(): string[] {
+    // ISBNs are listed in a labeled section whose span has aria-labelledby^="isbn-"
+    const isbnText = getText('[aria-labelledby^="isbn-"]');
+    if (isbnText) return extractIsbns(isbnText);
+    // Fallback: scan entire body text
     return extractIsbns(document.body.innerText);
   }
 
@@ -131,7 +127,6 @@ export class WorldCatSpaScraper implements IScraper {
 
     // Wait for React to hydrate the title before scraping.
     const titleEl = await waitForElement('h1');
-    console.log('[IlliadCopyCat] waitForElement(h1) resolved:', titleEl ? `"${titleEl.textContent?.trim().slice(0, 60)}"` : 'null (timed out)');
     if (!titleEl) {
       console.warn('[IlliadCopyCat] Timed out waiting for page content');
       return null;

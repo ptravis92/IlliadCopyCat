@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://search.worldcat.org/oclc/*",
+        "*://search.worldcat.org/*",
         "*://www.worldcat.org/oclc/*",
         "*://firstsearch.oclc.org/*"
       ],

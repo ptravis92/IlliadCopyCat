@@ -10,7 +10,6 @@ const scraper = createScraper();
 // ---------------------------------------------------------------------------
 
 async function run(): Promise<void> {
-  console.log('[IlliadCopyCat] run() — isItemPage:', scraper.isItemPage(), '| url:', location.href);
   if (!scraper.isItemPage()) {
     removeButton();
     return;
@@ -21,12 +20,8 @@ async function run(): Promise<void> {
     getSettings(),
   ]);
 
-  if (!metadata) {
-    console.warn('[IlliadCopyCat] Could not scrape page metadata');
-    return;
-  }
+  if (!metadata) return;
 
-  console.log('[IlliadCopyCat] Scraped metadata:', metadata);
   injectButton(metadata, settings.illiadBaseUrl);
 }
 

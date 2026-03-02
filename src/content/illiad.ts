@@ -103,8 +103,6 @@ function detectForm(metadata: WorldCatMetadata): ILLiadForm {
 export function buildILLiadUrl(baseUrl: string, metadata: WorldCatMetadata): string {
   const form = detectForm(metadata);
 
-  console.log(`[IlliadCopyCat] Detected form type: ${form} (format: "${metadata.format}")`);
-
   const params = new URLSearchParams();
   params.set('Action', '10');
 

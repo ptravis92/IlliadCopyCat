@@ -98,7 +98,6 @@ export function injectButton(metadata: WorldCatMetadata, illiadBaseUrl: string):
   document.getElementById(BUTTON_CONTAINER_ID)?.remove();
 
   const anchor = document.querySelector('h1');
-  console.log('[IlliadCopyCat] injectButton — h1 anchor:', anchor ? `"${anchor.textContent?.trim().slice(0, 60)}"` : 'null (not found)');
   if (!anchor) return;
 
   const container = buildContainer();
