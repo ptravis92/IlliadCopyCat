@@ -10,6 +10,7 @@ const scraper = createScraper();
 // ---------------------------------------------------------------------------
 
 async function run(): Promise<void> {
+  console.log('[IlliadCopyCat] run() — isItemPage:', scraper.isItemPage(), '| url:', location.href);
   if (!scraper.isItemPage()) {
     removeButton();
     return;

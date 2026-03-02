@@ -6,7 +6,6 @@ import {
   getFieldByLabel,
   getAllFieldsByLabel,
   extractIsbns,
-  extractIssns,
   waitForElement,
 } from './utils';
 
@@ -17,18 +16,23 @@ export class WorldCatSpaScraper implements IScraper {
   // ---------------------------------------------------------------------------
 
   isItemPage(): boolean {
-    return /\/oclc\/\d+/.test(location.href);
+    // search.worldcat.org uses /title/NUMBER (e.g. /title/930058725)
+    // www.worldcat.org uses /oclc/NUMBER (legacy format)
+    return /\/title\/\d+/.test(location.href) || /\/oclc\/\d+/.test(location.href);
   }
 
   // ---------------------------------------------------------------------------
   // OCLC number
   //
-  // New WorldCat SPA: OCLC number appears directly in the URL path.
+  // search.worldcat.org: number follows /title/ in the path.
+  // www.worldcat.org:    number follows /oclc/ in the path.
   // ---------------------------------------------------------------------------
 
   getOclcNumber(): string | null {
-    const match = location.href.match(/\/oclc\/(\d+)/);
-    return match ? match[1] : null;
+    const titleMatch = location.href.match(/\/title\/(\d+)/);
+    if (titleMatch) return titleMatch[1];
+    const oclcMatch = location.href.match(/\/oclc\/(\d+)/);
+    return oclcMatch ? oclcMatch[1] : null;
   }
 
   // ---------------------------------------------------------------------------
@@ -105,7 +109,17 @@ export class WorldCatSpaScraper implements IScraper {
   }
 
   scrapeIssns(): string[] {
-    return extractIssns(document.body.innerText);
+    // Require an explicit "ISSN" label before the number to avoid false matches
+    // from catalog numbers, dates, and other patterns in page body text.
+    // Books don't display an ISSN label; serial records do.
+    const bodyText = document.body.innerText;
+    const matches: string[] = [];
+    const labeledPattern = /\bISSN\b[:\s]+(\d{4}-\d{3}[\dX])/gi;
+    let match;
+    while ((match = labeledPattern.exec(bodyText)) !== null) {
+      matches.push(match[1]);
+    }
+    return [...new Set(matches)];
   }
 
   // ---------------------------------------------------------------------------
@@ -117,6 +131,7 @@ export class WorldCatSpaScraper implements IScraper {
 
     // Wait for React to hydrate the title before scraping.
     const titleEl = await waitForElement('h1');
+    console.log('[IlliadCopyCat] waitForElement(h1) resolved:', titleEl ? `"${titleEl.textContent?.trim().slice(0, 60)}"` : 'null (timed out)');
     if (!titleEl) {
       console.warn('[IlliadCopyCat] Timed out waiting for page content');
       return null;
