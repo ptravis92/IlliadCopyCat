@@ -16,7 +16,7 @@ chrome.runtime.onStartup.addListener(reRegisterFromStorage);
 
 // React to settings changes in real time — no page reload needed
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && 'librarySubdomain' in changes) {
+  if ((area === 'sync' || area === 'local') && 'librarySubdomain' in changes) {
     syncProxyContentScript(changes['librarySubdomain'].newValue ?? '');
   }
 });
